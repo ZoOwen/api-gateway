@@ -15,9 +15,11 @@ const (
 
 type Config struct {
 	Port        string
-	UpstreamURL *url.URL
+	UpstreamURL *url.URL // nil when DatabaseURL is set — upstream comes from each API key instead
 	RedisURL    string
 	LimiterAlgo string
+	DatabaseURL string
+	AdminToken  string // protects /admin/* and /debug/pprof/*; empty means those stay locked
 }
 
 func Load() (*Config, error) {
@@ -28,17 +30,24 @@ func Load() (*Config, error) {
 		port = "8080"
 	}
 
-	rawUpstream := os.Getenv("UPSTREAM_URL")
-	if rawUpstream == "" {
-		return nil, fmt.Errorf("UPSTREAM_URL is not set")
-	}
+	databaseURL := os.Getenv("DATABASE_URL")
 
-	upstreamURL, err := url.Parse(rawUpstream)
-	if err != nil {
-		return nil, fmt.Errorf("UPSTREAM_URL is not a valid URL: %w", err)
+	// UPSTREAM_URL is only required in the legacy single-upstream mode
+	// (no DATABASE_URL): with a database configured, each API key carries
+	// its own upstream_url instead.
+	var upstreamURL *url.URL
+	if rawUpstream := os.Getenv("UPSTREAM_URL"); rawUpstream != "" {
+		u, err := url.Parse(rawUpstream)
+		if err != nil {
+			return nil, fmt.Errorf("UPSTREAM_URL is not a valid URL: %w", err)
+		}
+		if u.Scheme == "" || u.Host == "" {
+			return nil, fmt.Errorf("UPSTREAM_URL is not a valid absolute URL: %q", rawUpstream)
+		}
+		upstreamURL = u
 	}
-	if upstreamURL.Scheme == "" || upstreamURL.Host == "" {
-		return nil, fmt.Errorf("UPSTREAM_URL is not a valid absolute URL: %q", rawUpstream)
+	if databaseURL == "" && upstreamURL == nil {
+		return nil, fmt.Errorf("UPSTREAM_URL is not set (required when DATABASE_URL is empty)")
 	}
 
 	algo := os.Getenv("LIMITER_ALGO")
@@ -54,5 +63,7 @@ func Load() (*Config, error) {
 		UpstreamURL: upstreamURL,
 		RedisURL:    os.Getenv("REDIS_URL"),
 		LimiterAlgo: algo,
+		DatabaseURL: databaseURL,
+		AdminToken:  os.Getenv("ADMIN_TOKEN"),
 	}, nil
 }

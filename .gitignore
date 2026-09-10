@@ -1,3 +1,4 @@
 .env
 test.bat
 *.exe
+bench/k6/results/

@@ -25,7 +25,13 @@ func WithLogger(logger *slog.Logger) Option {
 	return func(c *middlewareConfig) { c.logger = logger }
 }
 
-func Middleware(l Limiter, rule Rule, keyFn func(*http.Request) string, opts ...Option) func(http.Handler) http.Handler {
+// StaticRule returns a ruleFn that always returns the same Rule, for
+// callers that don't need a per-request (e.g. per-API-key) limit.
+func StaticRule(rule Rule) func(*http.Request) Rule {
+	return func(*http.Request) Rule { return rule }
+}
+
+func Middleware(l Limiter, ruleFn func(*http.Request) Rule, keyFn func(*http.Request) string, opts ...Option) func(http.Handler) http.Handler {
 	cfg := middlewareConfig{
 		failOpen: true,
 		logger:   slog.Default(),
@@ -37,6 +43,7 @@ func Middleware(l Limiter, rule Rule, keyFn func(*http.Request) string, opts ...
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			key := keyFn(r)
+			rule := ruleFn(r)
 
 			decision, err := l.Allow(r.Context(), key, rule)
 			if err != nil {
