@@ -1,4 +1,4 @@
-# gateway
+# api-gateway.
 
 An API gateway: it sits in front of one or more upstream APIs, authenticates
 callers with API keys stored in Postgres, rate-limits each key independently
